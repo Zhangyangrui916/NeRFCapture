@@ -143,13 +143,10 @@ class DatasetWriter {
     
     func writeFrameToDisk(frame: ARFrame, useDepthIfAvailable: Bool = true) {
         let frameName =  "\(getCurrentFrameName()).png"
-        let depthFrameName =  "\(getCurrentFrameName()).depth.png"
-        let baseDir = projectDir
-            .appendingPathComponent("images")
-        let fileName = baseDir
-            .appendingPathComponent(frameName)
-        let depthFileName = baseDir
-            .appendingPathComponent(depthFrameName)
+        let depthFrameName =  "\(getCurrentFrameName()).depth"
+        let baseDir = projectDir.appendingPathComponent("images")
+        let fileName = baseDir.appendingPathComponent(frameName)
+        let depthFileName = baseDir.appendingPathComponent(depthFrameName)
         
         if manifest.w == 0 {
             manifest.w = Int(frame.camera.imageResolution.width)
@@ -158,22 +155,40 @@ class DatasetWriter {
             manifest.flY =  frame.camera.intrinsics[1, 1]
             manifest.cx =  frame.camera.intrinsics[2, 0]
             manifest.cy =  frame.camera.intrinsics[2, 1]
+            let depthMap = frame.sceneDepth?.depthMap
+            if depthMap != nil{
+                manifest.depthMapWidth = CVPixelBufferGetWidth(depthMap!)
+                manifest.depthMapHeight = CVPixelBufferGetHeight(depthMap!)
+            }
         }
         
         let useDepth = frame.sceneDepth != nil && useDepthIfAvailable
         
         let frameMetadata = getFrameMetadata(frame, withDepth: useDepth)
         let rgbBuffer = pixelBufferToUIImage(pixelBuffer: frame.capturedImage)
-        let depthBuffer = useDepth ? pixelBufferToUIImage(pixelBuffer: frame.sceneDepth!.depthMap).resizeImageTo(size:  frame.camera.imageResolution) : nil
-        
+
+        if useDepth {
+            let depthMap = frame.sceneDepth!.depthMap
+            let width = CVPixelBufferGetWidth(depthMap)
+            let height = CVPixelBufferGetHeight(depthMap)
+
+            CVPixelBufferLockBaseAddress(depthMap, CVPixelBufferLockFlags(rawValue: 2))
+            defer {CVPixelBufferUnlockBaseAddress(depthMap, CVPixelBufferLockFlags(rawValue: 2))}
+            let ptr = CVPixelBufferGetBaseAddress(depthMap)
+            
+            let floatBuffer = unsafeBitCast(ptr, to: UnsafeMutablePointer<Float32>.self)
+            
+            let bytesPerRow = CVPixelBufferGetBytesPerRow(depthMap)
+            
+            let data = Data(bytes: floatBuffer, count: bytesPerRow * height)
+            try! data.write(to: depthFileName)
+        }
+
+
         DispatchQueue.global().async {
             do {
                 let rgbData = rgbBuffer.pngData()
                 try rgbData?.write(to: fileName)
-                if useDepth {
-                    let depthData = depthBuffer!.pngData()
-                    try depthData?.write(to: depthFileName)
-                }
             }
             catch {
                 print(error)

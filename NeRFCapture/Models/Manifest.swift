@@ -22,6 +22,8 @@ struct Manifest : Codable {
     }
     var w: Int = 0
     var h: Int = 0
+    var depthMapWidth: Int = 0
+    var depthMapHeight: Int = 0
     var flX: Float = 0
     var flY: Float = 0
     var cx: Float = 0
