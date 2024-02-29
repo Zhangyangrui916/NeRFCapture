@@ -185,7 +185,7 @@ class DatasetWriter {
         }
 
 
-        DispatchQueue.global().async {
+        DispatchQueue.global(qos: .background).async {
             do {
                 let rgbData = rgbBuffer.pngData()
                 try rgbData?.write(to: fileName)
